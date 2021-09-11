@@ -59,14 +59,35 @@ static void runFile(const char* path) {
 int main(int argc, const char* argv[]) {
 	initVM();
 
-	if (argc == 1) {
-		repl();
-	} else if (argc == 2) {
-		runFile(argv[1]);
-	} else {
-		fprintf(stderr, "Usage: clox [path]\n");
-		exit(64);
-	}
+	// const char* source = "print 1;";
+	// const char* source = "fun areWeHavingItYet() {"
+	// 	"print \"Yes we are!\";"
+	// 	"}"
+	// 	"print 1 + 2;"
+
+	// 	"print areWeHavingItYet;"
+	// ;
+
+	// const char* source =
+	// 	"fun a() { b(); }"
+	// 	"fun b() { c(); }"
+	// 	"fun c() { c(\"too\", \"many\"); }"
+	// 	"a();";
+
+	const char* source =
+		"fun sum(a, b) { return a + b; }"
+		"sum(1, 2);";
+
+	interpret(source);
+
+	// if (argc == 1) {
+	// 	repl();
+	// } else if (argc == 2) {
+	// 	runFile(argv[1]);
+	// } else {
+	// 	fprintf(stderr, "Usage: clox [path]\n");
+	// 	exit(64);
+	// }
 
 	freeVM();
 
