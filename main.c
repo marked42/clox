@@ -74,10 +74,11 @@ int main(int argc, const char* argv[]) {
 	// 	"fun c() { c(\"too\", \"many\"); }"
 	// 	"a();";
 
-	const char* source =
-		"fun sum(a, b) { return a + b; }"
-		"sum(1, 2);";
+	// const char* source =
+	// 	"fun sum(a, b) { return a + b; }"
+	// 	"sum(1, 2);";
 
+	const char* source = "print clock();";
 	interpret(source);
 
 	// if (argc == 1) {
