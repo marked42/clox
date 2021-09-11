@@ -31,6 +31,7 @@ struct Obj {
     struct Obj* next;
 };
 
+// TODO: 去掉ObjString编译出错 typedef struct {
 typedef struct ObjString {
     Obj obj;
     int length;

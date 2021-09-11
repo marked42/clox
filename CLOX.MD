@@ -18,6 +18,7 @@
       1. http://journal.stuffwithstuff.com/2020/04/05/crafting-crafting-interpreters/
       2. https://twitter.com/munificentbob/status/901543375945388032
       3. http://journal.stuffwithstuff.com/category/language/
+6. c 语言 switch case 中必须使用花括号块才能声明局部变量，否则报错。
 
 ## 字节码格式
 
