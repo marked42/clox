@@ -78,7 +78,18 @@ int main(int argc, const char* argv[]) {
 	// 	"fun sum(a, b) { return a + b; }"
 	// 	"sum(1, 2);";
 
-	const char* source = "print clock();";
+	// const char* source = "print clock();";
+
+	const char* source =
+"var x = \"global\";"
+"fun outer() {"
+"  var x = \"outer\";"
+"  fun inner() {"
+"    print x;"
+"  }"
+"  inner();"
+"}"
+"outer();";
 	interpret(source);
 
 	// if (argc == 1) {

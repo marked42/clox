@@ -18,7 +18,6 @@
       1. http://journal.stuffwithstuff.com/2020/04/05/crafting-crafting-interpreters/
       2. https://twitter.com/munificentbob/status/901543375945388032
       3. http://journal.stuffwithstuff.com/category/language/
-6. c 语言 switch case 中必须使用花括号块才能声明局部变量，否则报错。
 
 ## 字节码格式
 
@@ -224,9 +223,19 @@ var b = b + 1
 编译时将计算局部变量偏移量，因此字节码中不存在局部变量的名称，对于 debugger 来说需要其他方式
 来存储这些信息。
 
+Javascript 中这种语法不会报错。
+
+```javascript
+// Undefined variable a
+// [line 1] in script
+{ print a; var a = 1; }
+```
+
 ### 重复声明
 
 同一个作用域中重新声明同名变量，Javascript var 允许 let/const 不允许， REPL 环境下允许 rust 允许。
+
+### 问题
 
 ## 流程控制
 
@@ -283,13 +292,25 @@ done:
 
 1. 函数定义
 1. 函数调用
-1. 递归支持
+1. 递归支持 call stack overflow/ operand stack overflow
 1. inline
-1. 函数参数
+1. 函数参数，参数个数限制，因为实参使用一个字节表示，所以最多支持 256 个参数，形参实参个数不一致检测。
 1. 函数返回值
+   1. 支持递归的函数每个函数调用都需要一个返回值，不支持递归的函数一个函数在同一个时刻只需要一个返回值，Fortran
+   1. 函数可能没有显式返回值，隐式返回 NIL
+   1. return 语句只能使用在函数内
 1. 变长参数
-1. 嵌套函数定义
+1. 嵌套函数定义，嵌套层数需要限制
 1. first-class function
 1. native function
+1. [optimization challenge](https://craftinginterpreters.com/calls-and-functions.html#challenges)
 1. closure
 1. tail call optimization
+
+stack semantic
+
+> Many Lisp implementations dynamically allocate stack frames because it simplifies implementing continuations. If your language supports continuations, then function calls do not always have stack semantics.
+
+## Closure
+
+Closure Conversion & Lambda lifting
