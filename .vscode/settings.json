@@ -20,6 +20,16 @@
 		"system_error": "cpp",
 		"tuple": "cpp",
 		"type_traits": "cpp",
-		"vector": "cpp"
-	}
+		"vector": "cpp",
+		"__hash_table": "cpp",
+		"__split_buffer": "cpp",
+		"array": "cpp",
+		"string": "cpp",
+		"string_view": "cpp",
+		"unordered_map": "cpp"
+	},
+	"cSpell.words": [
+		"Upvalue",
+		"upvalues"
+	]
 }

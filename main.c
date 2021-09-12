@@ -80,16 +80,27 @@ int main(int argc, const char* argv[]) {
 
 	// const char* source = "print clock();";
 
+// 	const char* source =
+// "var x = \"global\";"
+// "fun outer() {"
+// "  var x = \"outer\";"
+// "  fun inner() {"
+// "    print x;"
+// "  }"
+// "  inner();"
+// "}"
+// "outer();";
+
 	const char* source =
-"var x = \"global\";"
 "fun outer() {"
-"  var x = \"outer\";"
+"  var x = \"outside\";"
 "  fun inner() {"
 "    print x;"
 "  }"
 "  inner();"
 "}"
 "outer();";
+
 	interpret(source);
 
 	// if (argc == 1) {

@@ -313,4 +313,6 @@ stack semantic
 
 ## Closure
 
-Closure Conversion & Lambda lifting
+查询关键词搜索相关资料 Closure Conversion & Lambda lifting
+
+[Closure conversion: How to compile lambda](https://matt.might.net/articles/closure-conversion/)
