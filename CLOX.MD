@@ -318,3 +318,179 @@ stack semantic
 [Closure conversion: How to compile lambda](https://matt.might.net/articles/closure-conversion/)
 
 循环的闭包处理 loop variable closure 参考 https://craftinginterpreters.com/closures.html#design-note
+
+闭包功能要解决的问题
+
+### 闭包的表示
+
+闭包等于函数定义 + 捕获的变量列表。
+
+```c
+struct Closure {
+   Function function;
+   // 捕获变量列表
+   Upvalue** upvalues;
+}
+```
+
+### 捕获变量列表
+
+#### 编译时
+
+编译时分析函数内使用的变量分类，局部变量、捕获变量、全局变量，其中捕获变量就是建立闭包需要的变量列表。捕获变量分成两类：直接上层函数的的局部变量、间接上层函数的局部变量。
+
+捕获变量列表分为两类，区别在于：
+
+1. 直接上层函数的局部变量，在运行时创建闭包函数的时候，局部变量还存在于栈上。
+1. 间接上层函数的局部变量，在运行时创建闭包函数的时候，可能已经从栈上被弹出，因为闭包函数可以作为返回值传递，在其他任意时刻使用。
+
+```js
+function outer() {
+  let a = 1
+
+  function middle() {
+    console.log(a)
+
+    function inner() {
+      console.log(a)
+    }
+  }
+}
+```
+
+对于捕获变量增加间接层 Upvalue 来表示，对于捕获变量的访问都通过 Upvalue 进行。
+
+```c
+struct Upvalue {
+   // 是直接上层函数的局部变量
+   bool isLocal;
+   // 下标
+   int index;
+}
+```
+
+通过对于捕获变量的分析，建立一个捕获的树结构，upvalues 字段直接引用上层 locals 或者间接引用 upvalues
+
+```text
+outer
+   locals
+   upvalues
+
+middle
+   locals
+   upvalues
+
+inner
+   locals
+   upvalues
+```
+
+树结构建立的逻辑的递归函数 resoveUpvalue
+
+1. 判断是否是局部变量，不需要捕获 preorder
+1. 捕获变量
+   1. 判断是否是上层函数的局部变量，直接捕获 local:true, index
+   1. 递归的调用上层函数的 resolveUpvalue 来确认变量是否被间接捕获，是的话新增间接捕获变量 local: false, index,
+1. 其他情况是全局变量，没有更上层的函数环境了 post-order
+
+注意函数内同名变量可能使用多次，所以在创建新的捕获项时先要查询是否已经存在，避免重复。
+
+#### 运行时
+
+捕获的是值还是变量？
+
+```c
+var globalSet;
+var globalGet;
+
+fun main() {
+  var a = "initial";
+
+  fun set() { a = "updated"; }
+  fun get() { print a; }
+
+  globalSet = set;
+  globalGet = get;
+}
+
+main();
+globalSet();
+globalGet();
+```
+
+因为捕获的是变量，所以运行时只能为一个变量创建一个 Upvalue，保存 Upvalue 指针类型，这样所有用到该 Upvalue 的地方访问的都是同一个变量。
+
+```c
+struct Upvalue {
+   // 被捕获的变量的地址
+   Value* location;
+}
+
+// 运行时捕获的变量列表中每一项元素都是Upvalue指针类型。
+struct Closure {
+   // upvalues数组本身应该在堆上动态分配，这样函数调用结束后也能继续存在
+   Upvalue* upvalues[];
+}
+```
+
+使用编译时分析得到的 Upvalues 树结构，在运行时创建闭包函数实例。函数是闭包的原型，每个闭包捕获的数据是独立的。捕获的时机是函数定义的时候，此时外层函数的局部变量还在栈上。
+
+```js
+for (let i = 0; i < this.upvalues.length; i++) {
+  const upvalue = upvalues[i]
+  if (upvalue.local) {
+    // 捕获的是局部变量的地址
+    upvalues[i] = capture(frame.slots + index)
+  } else {
+    upvalues[i] = parent.upvalues[index]
+  }
+}
+```
+
+下面例子中同一个变量 a 被 inner1 和 inner 重复捕获，创建两个 Upvalue 实例，由于变量捕获的不是值，保证多次变量捕获只有一个实例。
+
+```js
+fun outer {
+   var a = 1;
+
+   fun inner1() {
+      print a;
+   }
+
+   fun inner2() {
+      print a;
+   }
+}
+```
+
+使用链表将捕获变量顺序 location 排列，变量捕获时保证链表中没有重复元素，修改 capture 的实现。
+
+```js
+function capture(location) {
+  // 全局字段 openValues表示捕获变量，是捕获变量的head节点
+  openValues
+}
+```
+
+#### 延长捕获变量生命周期
+
+每个被捕获的变量 captured（可以提前分析出每个变量是否被捕获）在从栈上被弹出的时候需要拷贝到堆内存中，延长其生命周期。
+
+```c
+struct Upvalue {
+   Value closed;
+   Value* location;
+}
+```
+
+延长操作分为两步
+
+1. 拷贝变量值到 closed 字段
+1. 使用 closed 字段的地址更新 location 字段，
+
+对于捕获变量的访问永远是通过 upvalue location 字段间接访问，这样对于访问者来说，捕获变量是在栈上还是在堆上并无区别。
+
+延长捕获变量生命周期的操作 closeValues 调用的两个时机
+
+1. 局部作用域结束，局部作用域中的变量需要 close
+1. 函数调用结束，函数参数局部变量，需要 close
