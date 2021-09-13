@@ -27,6 +27,8 @@ typedef struct {
     Obj* objects;
     Table strings;
     Table globals;
+
+    ObjUpvalue* openValues;
 } VM;
 
 extern VM vm;

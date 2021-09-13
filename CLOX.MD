@@ -316,3 +316,5 @@ stack semantic
 查询关键词搜索相关资料 Closure Conversion & Lambda lifting
 
 [Closure conversion: How to compile lambda](https://matt.might.net/articles/closure-conversion/)
+
+循环的闭包处理 loop variable closure 参考 https://craftinginterpreters.com/closures.html#design-note

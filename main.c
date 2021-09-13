@@ -94,12 +94,26 @@ int main(int argc, const char* argv[]) {
 	const char* source =
 "fun outer() {"
 "  var x = \"outside\";"
-"  fun inner() {"
+"  fun inner1() {"
 "    print x;"
 "  }"
-"  inner();"
-"}"
-"outer();";
+"  fun inner2() {"
+"    print x;"
+"  }"
+"}";
+
+// 	const char* source =
+// "fun outer() {"
+// "  var a = 1;"
+// "  var b = 2;"
+// "  fun middle() {"
+// "    var c = 3;"
+// "    var d = 4;"
+// "    fun inner() {"
+// "      print a + c + b + d;"
+// "    }"
+// "  }"
+// "}";
 
 	interpret(source);
 

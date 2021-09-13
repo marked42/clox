@@ -51,6 +51,7 @@ typedef struct {
 typedef struct {
     Token name;
     int depth;
+    bool isCaptured;
 } Local;
 
 typedef struct Upvalue {
@@ -169,7 +170,7 @@ void emitReturn() {
 
 ObjFunction *endCompiler() {
     // generate implicit return instruction if last statement is not return statement
-    if (current->function->chunk.code[current->function->chunk.count - 1] != OP_RETURN) {
+    if (currentChunk()->code[currentChunk()->count - 1] != OP_RETURN) {
         emitReturn();
     }
 
@@ -264,6 +265,7 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
     local->depth = 0;
     local->name.start = "";
     local->name.length = 0;
+    local->isCaptured = false;
 }
 
 static void number(bool canAssign) {
@@ -389,8 +391,10 @@ static int addUpvalue(Compiler* compiler, uint8_t index, bool isLocal) {
 static int resolveUpvalue(Compiler* compiler, Token* name) {
     if (compiler->enclosing == NULL) { return -1; }
 
-    int local = resolveLocal(compiler, name);
+    // 首先在外层作用域寻找局部变量
+    int local = resolveLocal(compiler->enclosing, name);
     if (local != -1) {
+        compiler->enclosing->locals[local].isCaptured = true;
         return addUpvalue(compiler, (uint8_t)local, true);
     }
 
@@ -406,17 +410,17 @@ static void namedVariable(Token* token, bool canAssign) {
     int arg = resolveLocal(current, token);
     uint8_t getOp, setOp;
     // find no local variable of name token, so it's a global variable
-    if (arg == LOCAL_VARIABLE_NOT_FOUND) {
-        arg = identifierConstant(token);
-        getOp = OP_GET_GLOBAL;
-        setOp = OP_SET_GLOBAL;
+    if (arg != LOCAL_VARIABLE_NOT_FOUND) {
+        getOp = OP_GET_LOCAL;
+        setOp = OP_SET_LOCAL;
     // local variable
     } else if ((arg = resolveUpvalue(current, token)) != -1) {
         getOp = OP_GET_UPVALUE;
         setOp = OP_SET_UPVALUE;
     } else {
-        getOp = OP_GET_LOCAL;
-        setOp = OP_SET_LOCAL;
+        arg = identifierConstant(token);
+        getOp = OP_GET_GLOBAL;
+        setOp = OP_SET_GLOBAL;
     }
     if (canAssign && match(TOKEN_EQUAL)) {
         expression();
@@ -526,6 +530,7 @@ static void addLocal(Token name) {
     variable->name = name;
     // mark local variable as uninitialized using depth
     variable->depth = LOCAL_VARIABLE_UNINITIALIZED;
+    variable->isCaptured = false;
 
     current->localCount++;
 }
@@ -687,8 +692,12 @@ static void endScope() {
         if (current->locals[i].depth < current->scopeDepth) {
             break;
         }
+        if (current->locals[current->localCount - 1].isCaptured) {
+            emitByte(OP_CLOSE_UPVALUE);
+        } else {
+            emitByte(OP_POP);
+        }
         current->localCount--;
-        emitByte(OP_POP);
     }
     current->scopeDepth--;
 

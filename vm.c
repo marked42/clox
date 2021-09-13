@@ -25,6 +25,7 @@ static void defineNative(const char* name, NativeFn function) {
 void resetStack() {
 	vm.stackTop = vm.stack;
     vm.frameCount = 0;
+    vm.openValues = NULL;
 }
 
 static Value clockNative(int argCount, Value* args) {
@@ -159,9 +160,45 @@ static bool callValue(Value callee, int argCount) {
     return false;
 }
 
+// TODO: 向有序链表中插入新元素，或者如果存在相同元素，返回已有元素
 static ObjUpvalue* captureUpvalue(Value* local) {
-  ObjUpvalue* createdUpvalue = newUpvalue(local);
-  return createdUpvalue;
+    ObjUpvalue* preUpvalue = NULL;
+    ObjUpvalue* upvalue = vm.openValues;
+
+    while (upvalue != NULL && upvalue->location > local) {
+        preUpvalue = upvalue;
+        upvalue = upvalue->next;
+    }
+
+    if (upvalue != NULL && upvalue->location == local) {
+        return upvalue;
+    }
+
+    ObjUpvalue* createdUpvalue = newUpvalue(local);
+    createdUpvalue->next = upvalue;
+
+    if (preUpvalue == NULL) {
+        vm.openValues = createdUpvalue;
+    } else {
+        preUpvalue->next = createdUpvalue;
+    }
+
+    return createdUpvalue;
+}
+
+// 栈上的参数被闭包的两个时机
+// 1. 块级作用域结束，块内变量close
+// 2. 函数执行完成，函数参数此时在栈顶，也需要close
+static void closeUpvalues(Value* last) {
+    while (vm.openValues != NULL && vm.openValues->location >= last)  {
+        ObjUpvalue* upvalue = vm.openValues;
+
+        // 从栈上拷贝到Upvalue closed字段，堆上
+        upvalue->closed = *upvalue->location;
+        upvalue->location = &upvalue->closed;
+
+        vm.openValues = upvalue->next;
+    }
 }
 
 static bool isFalsey(Value value) {
@@ -200,6 +237,7 @@ static InterpertResult run() {
     } while (false)
 
 
+    printf("\nrun\n");
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
         printf("--         ");
@@ -215,6 +253,8 @@ static InterpertResult run() {
         switch (instruction = READ_BYTE()) {
             case OP_RETURN: {
                 Value result = pop();
+                // 栈帧开始的位置
+                closeUpvalues(frame->slots);
                 vm.frameCount--;
                 if (vm.frameCount == 0) {
                     pop();
@@ -375,6 +415,10 @@ static InterpertResult run() {
                 *frame->closure->upvalues[slot]->location = peek(0);
                 break;
             }
+            case OP_CLOSE_UPVALUE:
+                closeUpvalues(vm.stackTop - 1);
+                pop();
+                break;
             break;
         }
     }
