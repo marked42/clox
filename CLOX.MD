@@ -494,3 +494,40 @@ struct Upvalue {
 
 1. 局部作用域结束，局部作用域中的变量需要 close
 1. 函数调用结束，函数参数局部变量，需要 close
+
+### Chp6 Activation Record 激活记录
+
+一个语言同时支持嵌套函数和函数作为返回值的功能时，局部变量生命周期需要别延长。
+
+> It is the combination of nested functions (where inner functions may use variables defined in the outer functions) and functions returned as results (or stored into variables) that causes local variables to need lifetimes longer than their enclosing function invocations.
+
+1. Pascal 支持嵌套函数，但不支持函数作为返回值
+1. C 支持返回函数，但是不支持嵌套函数
+1. Scheme/ML 都支持，这样的函数称为高阶函数（high-order function）
+
+栈帧（Stack Frame）也叫激活记录(Activation Record)包括了局部变量、函数参数、返回地址和其他临时变量。
+
+> The area on the stack devoted to the local variables, parameters, re- turn address, and other temporaries for a function is called the function’s activation record or stack frame.
+
+历史原因，栈帧从高地址向低地址增长。
+
+栈帧的布局设计跟指令集和编程语言有关，但是使用一个指令集上推荐的标准布局可以方便跨语言函数调用。
+
+TODO：需要一个图，描述栈帧的结构
+
+Register Allocation
+
+寄存器需要在函数调用时保存到栈帧中的临时变量中，区分 caller 或者 callee 负责进行这个操作，对不同变量使用不同的策略，可以减少生成指令的个数。
+
+参数传递
+
+使用寄存器作为参数的优势，寄存器的访问速度比内存访问快得多（2 个数量级）？
+
+1. 叶节点调用（leaf procedure）不调用其他函数，使用寄存器保存函数的话不需要创建栈帧。
+1. 对于嵌套函数调用可将参数分配到不同的寄存器上，也能避免创建栈帧。
+1. 局部参数 x 可能在子函数调用时不再被使用到，这样保存在寄存器上 r 的 x 参数可以直接被覆盖而不需要保存。
+1. 寄存器窗口机制，每个函数调用可以分配一组新的寄存器，不需要内存访问。
+
+返回地址
+
+假设函数 g 调用 f，CALL 指令地址是 a，f 的返回地址通常是 a + 1；现代的架构中更可能使用寄存器保存返回地址。
