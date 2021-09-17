@@ -13,14 +13,18 @@
 
 #define ALLOCATE_OBJ(type, objType) (type*)allocateObject(sizeof(type), objType)
 
-static Obj* allocateObject(size_t size, ObjType objType) {
+static Obj* allocateObject(size_t size, ObjType type) {
     Obj* object = (Obj*) reallocate(NULL, 0, size);
-    object->type = objType;
+    object->type = type;
+    object->isMarked = false;
 
     // tracks every allocated obj
     object->next = vm.objects;
     vm.objects = object;
 
+#ifdef DEBUG_LOG_GC
+    printf("%p allocate %zu for %d\n", (void*)object, size, type);
+#endif // DEBUG_LOG_GC
     return object;
 }
 
@@ -131,6 +135,6 @@ ObjUpvalue* newUpvalue(Value* slot) {
   ObjUpvalue* upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
   upvalue->location = slot;
   upvalue->next = NULL;
-  upvalue->closed = VAL_NIL;
+  upvalue->closed = NIL_VAL;
   return upvalue;
 }

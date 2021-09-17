@@ -20,6 +20,12 @@
 
 void* reallocate(void* pointer, size_t oldSize, size_t newSize);
 
+void collectGarbage();
+
 void freeObjects();
+
+void markObject(Obj* object);
+
+void markValue(Value value);
 
 #endif

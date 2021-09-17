@@ -531,3 +531,13 @@ Register Allocation
 返回地址
 
 假设函数 g 调用 f，CALL 指令地址是 a，f 的返回地址通常是 a + 1；现代的架构中更可能使用寄存器保存返回地址。
+
+## gc
+
+如何判断内存不再需要？
+
+usefulness -> reachability
+
+名词解释
+
+1. mutator & collector
