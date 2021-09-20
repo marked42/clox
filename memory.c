@@ -123,4 +123,6 @@ void collectGarbage() {
 #ifdef DEBUG_LOG_GC
     printf("-- gc end\n");
 #endif // DEBUG_LOG_GC
+void collectGarbage() {
+
 }
