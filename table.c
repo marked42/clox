@@ -150,3 +150,12 @@ void markTable(Table* table) {
         markValue(entry->value);
     }
 }
+
+void tableRemoveWhile(Table* table) {
+    for (int i = 0; i < table->count; i++) {
+        Entry* entry = &table->entries[i];
+        if (entry->key != NULL && !entry->key->obj.isMarked) {
+            tableDelete(table, entry->key);
+        }
+    }
+}

@@ -534,6 +534,8 @@ Register Allocation
 
 ## gc
 
+扫描 native c stack 中的内存指针 https://en.wikipedia.org/wiki/Boehm_garbage_collector
+
 如何判断内存不再需要？
 
 usefulness -> reachability
@@ -541,3 +543,10 @@ usefulness -> reachability
 名词解释
 
 1. mutator & collector
+
+实现中容易出出现的问题
+
+1. 如果一个操作需要分配一个新的动态内存对象，之后的操作会触发 gc 的话，需要把新分配的内存对象保存在操作数栈上，使得它能够被标记到，否则会被回收导致对象失效无法使用。
+   1. 新增全局常量
+   1. 新增 intern 的字符串
+   1. 字符串拼接，如果先将两个字符串从栈上弹出，然后申请新内存可能触发 gc，这时弹出的字符串不会被标记到从而被回收，然后进行拼接时访问原来的两个字符串会出错。

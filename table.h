@@ -37,4 +37,6 @@ ObjString* tableFindString(Table* table, const char* chars, int length, uint32_t
 
 void markTable(Table* table);
 
+void tableRemoveWhile(Table* table);
+
 #endif //CLOX1_TABLE_H
