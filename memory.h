@@ -24,4 +24,8 @@ void collectGarbage();
 
 void freeObjects();
 
+void markObject(Obj* object);
+
+void markValue(Value value);
+
 #endif
