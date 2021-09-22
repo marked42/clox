@@ -53,9 +53,9 @@ typedef enum {
 InterpertResult interpret(const char* source);
 
 
-static void push(Value value);
+void push(Value value);
 
-static Value pop();
+Value pop();
 
 #endif
 

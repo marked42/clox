@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 #include "vm.h"
 #include "common.h"
@@ -53,7 +54,6 @@ void initVM() {
 void freeVM() {
     freeObjects();
 
-    free(vm.grayStack);
     freeTable(&vm.strings);
     freeTable(&vm.globals);
 }

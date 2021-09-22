@@ -17,10 +17,10 @@ void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
 #ifdef DEBUG_STRESS_GC
         collectGarbage();
 #endif // DEBUG_STRESS_GC
-    }
 
-    if (vm.bytesAllocated > vm.nextGC) {
-        collectGarbage();
+        if (vm.bytesAllocated > vm.nextGC) {
+            collectGarbage();
+        }
     }
 
 	if (newSize == 0) {
@@ -35,6 +35,10 @@ void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
 }
 
 static void freeObject(Obj* object) {
+#ifdef DEBUG_LOG_GC
+    printf("%p free type %d\n", (void*)object, object->type);
+#endif // DEBUG
+
     switch (object->type) {
         case OBJ_STRING:
         {
@@ -66,10 +70,6 @@ static void freeObject(Obj* object) {
             break;
         }
     }
-
-#ifdef DEBUG_LOG_GC
-    printf("%p free type %d\n", (void*)object, object->type);
-#endif // DEBUG
 }
 
 void freeObjects() {
@@ -80,7 +80,9 @@ void freeObjects() {
         object = next;
     }
 
+    // set to pointer to NULL after reclamation
     free(vm.grayStack);
+    vm.grayStack = NULL;
 }
 
 void markObject(Obj* object) {

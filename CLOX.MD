@@ -319,6 +319,11 @@ stack semantic
 
 循环的闭包处理 loop variable closure 参考 https://craftinginterpreters.com/closures.html#design-note
 
+闭包的设计
+
+1. https://mrale.ph/blog/2012/09/23/grokking-v8-closures-for-fun.html
+1. https://blog.mozilla.org/luke/2012/10/02/optimizing-javascript-variable-access/
+
 闭包功能要解决的问题
 
 ### 闭包的表示

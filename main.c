@@ -102,14 +102,16 @@ int main(int argc, const char* argv[]) {
 // "  }"
 // "}";
 
-	const char* source =
-"fun a() {"
-"	print \"a\";"
-"}"
-"fun b() {"
-"	a();"
-"}"
-"b();";
+// 	const char* source =
+// "fun a() {"
+// "	print \"a\";"
+// "}"
+// "fun b() {"
+// "	a();"
+// "}"
+// "b();";
+
+	const char* source = "print 1;";
 
 // 	const char* source =
 // "fun outer() {"
