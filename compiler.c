@@ -308,6 +308,22 @@ static void call(bool canAssign) {
     emitBytes(OP_CALL, argCount);
 }
 
+static uint8_t identifierConstant(Token* name) {
+    return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
+}
+
+static void dot(bool canAssign) {
+    consume(TOKEN_IDENTIFIER, "Expect property name after '.'");
+    uint8_t name = identifierConstant(&parser.previous);
+
+    if (canAssign && match(TOKEN_EQUAL)) {
+        expression();
+        emitBytes(OP_SET_PROPERTY, name);
+    } else {
+        emitBytes(OP_GET_PROPERTY, name);
+    }
+}
+
 static void binary(bool canAssign) {
   TokenType operatorType = parser.previous.type;
   ParseRule* rule = getRule(operatorType);
@@ -339,10 +355,6 @@ static void literal(bool canAssign) {
 
 static void string(bool canAssign) {
     emitConstant(OBJ_VAL(copyString(parser.previous.start + 1, parser.previous.length - 2)));
-}
-
-static uint8_t identifierConstant(Token* name) {
-    return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
 }
 
 static bool identifiersEqual(Token* left, Token* right) {
@@ -462,7 +474,7 @@ ParseRule rules[] = {
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_DOT]           = {NULL,     dot,    PREC_CALL},
   [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
   [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
   [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
@@ -541,7 +553,9 @@ static void markInitialized() {
     current->locals[current->localCount - 1].depth = current->scopeDepth;
 }
 
-
+/**
+ * 之前读到的标识符作为变量名
+ **/
 static void declareVariable() {
     // skip global variable skip
     if (current->scopeDepth == 0) {
@@ -791,8 +805,23 @@ static void funDeclaration() {
     defineVariable(global);
 }
 
+static void classDeclaration() {
+    consume(TOKEN_IDENTIFIER, "Expect class name.");
+    uint8_t constant = identifierConstant(&parser.previous);
+
+    declareVariable();
+
+    emitBytes(OP_CLASS, constant);
+    defineVariable(constant);
+
+    consume(TOKEN_LEFT_BRACE, "Expect '{' after class name");
+    consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body");
+}
+
 static void declaration() {
-    if (match(TOKEN_VAR)) {
+    if (match(TOKEN_CLASS)) {
+        classDeclaration();
+    } else if (match(TOKEN_VAR)) {
         varDeclaration();
     } else if (match(TOKEN_FUN)) {
         funDeclaration();

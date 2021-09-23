@@ -311,6 +311,17 @@ stack semantic
 
 > Many Lisp implementations dynamically allocate stack frames because it simplifies implementing continuations. If your language supports continuations, then function calls do not always have stack semantics.
 
+函数调用的栈帧格式
+
+函数调用 OP_CALL 之前栈帧将栈帧形成这种格式，被调用的函数在栈帧开始位置，后接若干个函数实参。
+
+fn param1 param2 param3
+
+OP_CALL 指令的作用是创建新的栈帧，call frame，栈帧开头指向 fn。
+
+函数调用结束时 OP_RETURN 指令，作用是将函数返回值放到栈帧开头位置。
+OP_CLASS 遵循同样规则，初始化结束后将新创建的类实例放到栈帧开头位置。
+
 ## Closure
 
 查询关键词搜索相关资料 Closure Conversion & Lambda lifting
@@ -606,7 +617,10 @@ stop-the-world 进行 gc 时用户程序停止执行
 1. 实例 ObjInstance
 1. 类的声明 ClassDeclaration
 1. 创建类实例
-1. 实例属性读写
+1. 实例属性读写，成员表达式解析，根据读写生成对应的字节码 OP_GET_PROPERTY/OP_SET_PROPERTY
+   1. 读写都要检查 实例是否是 ObjInstance 类型
+   1. 读需要在属性不存在是报运行时错误
+   1.
 1. 类实例是否允许动态添加删除字段（Field）读写不存在的 Field 如何处理？如何优化属性读写性能，在编译时确认所有类实例字段？
 1. 访问实例属性表达式中，object 不是对象实例如何处理？
 1. 定义类方法

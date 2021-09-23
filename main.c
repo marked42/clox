@@ -111,7 +111,27 @@ int main(int argc, const char* argv[]) {
 // "}"
 // "b();";
 
-	const char* source = "print 1;";
+	// const char* source = "print 1;";
+
+	// empty class declaration
+	// const char* source = "{ class Test {}  print Test; }";
+
+	// call class as constructor function without new keyword to create new instance
+	// const char* source = "class Test {} print Test();";
+
+	// 属性读写
+// 	const char* source =
+// "class Toast {}"
+// "var toast = Toast();"
+// "print toast.jam = \"grape\";";
+
+	// 属性读写例子2
+	const char* source =
+"class Pair {}"
+"var pair = Pair();"
+"pair.first = 1;"
+"pair.second = 2;"
+"print pair.first + pair.second;";
 
 // 	const char* source =
 // "fun outer() {"

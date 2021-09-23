@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "compiler.h"
 #include "memory.h"
+#include "table.h"
 #include "vm.h"
 
 #ifdef DEBUG_LOG_GC
@@ -65,8 +66,17 @@ static void freeObject(Obj* object) {
             break;
         }
         case OBJ_UPVALUE: {
-
             FREE(ObjUpvalue, object);
+            break;
+        }
+        case OBJ_CLASS: {
+            FREE(OBJ_CLASS, object);
+            break;
+        }
+        case OBJ_INSTANCE: {
+            ObjInstance* instance = (ObjInstance*)object;
+            freeTable(&instance->fields);
+            FREE(OBJ_INSTANCE, instance);
             break;
         }
     }
@@ -178,6 +188,16 @@ static void blackenObject(Obj* object) {
             markObject((Obj*)closure->upvalues[i]);
         }
         break;
+    }
+    case OBJ_CLASS: {
+        ObjClass* klass = (ObjClass*) object;
+        markObject((Obj*)klass->name);
+        break;
+    }
+    case OBJ_INSTANCE: {
+        ObjInstance* instance = (ObjInstance*)object;
+        markObject((Obj*)instance->klass);
+        markTable(&instance->fields);
     }
 
     default:

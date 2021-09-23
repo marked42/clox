@@ -162,6 +162,12 @@ static bool callValue(Value callee, int argCount) {
             return true;
         }
 
+        case OBJ_CLASS: {
+            ObjClass* klass = AS_CLASS(callee);
+            vm.stackTop[- 1 - argCount] = OBJ_VAL(newInstance(klass));
+            return true;
+        }
+
         default:
             break;
         }
@@ -276,7 +282,6 @@ static InterpertResult run() {
                 vm.stackTop = frame->slots;
                 push(result);
                 frame = &vm.frames[vm.frameCount - 1];
-
                 break;
             }
             case OP_NEGATE:
@@ -431,7 +436,49 @@ static InterpertResult run() {
                 closeUpvalues(vm.stackTop - 1);
                 pop();
                 break;
-            break;
+
+            case OP_CLASS:
+                push(OBJ_VAL(newClass(READ_STRING())));
+                break;
+
+            case OP_GET_PROPERTY: {
+                if (!IS_INSTANCE(peek(0))) {
+                    runtimeError("Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                ObjString* name = READ_STRING();
+                ObjInstance* instance = AS_INSTANCE(peek(0));
+
+                Value value;
+                if (tableGet(&instance->fields, name, &value)) {
+                    pop();
+                    push(value);
+                    break;
+                }
+
+                runtimeError("Undefined property '%s'.", name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+
+            case OP_SET_PROPERTY: {
+                if (!IS_INSTANCE(peek(1))) {
+                    runtimeError("Only instances have fields.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                ObjString* name = READ_STRING();
+                Value value = peek(0);
+                ObjInstance* instance = AS_INSTANCE(peek(1));
+
+                tableSet(&instance->fields, name, value);
+                pop();
+                pop();
+                push(value);
+                break;
+            }
+
+            default:
+                break;
         }
     }
 
