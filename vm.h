@@ -28,6 +28,8 @@ typedef struct {
     Table strings;
     Table globals;
 
+    ObjString* initString;
+
     ObjUpvalue* openValues;
 
     int grayCount;

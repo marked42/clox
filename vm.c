@@ -10,6 +10,7 @@
 #include "compiler.h"
 #include "chunk.h"
 #include "memory.h"
+#include "object.h"
 
 VM vm;
 
@@ -46,6 +47,10 @@ void initVM() {
     vm.grayStack = NULL;
 
     initTable(&vm.strings);
+    // 先初始化为NULL，防止copyString触发GC时会访问到initString
+    vm.initString = NULL;
+    vm.initString = copyString("init", 4);
+
     initTable(&vm.globals);
 
     defineNative("clock", clockNative);
@@ -53,6 +58,8 @@ void initVM() {
 
 void freeVM() {
     freeObjects();
+
+    vm.initString = NULL;
 
     freeTable(&vm.strings);
     freeTable(&vm.globals);
@@ -150,10 +157,12 @@ static bool callValue(Value callee, int argCount) {
         {
         // case OBJ_FUNCTION:
         //     return call(AS_FUNCTION(callee), argCount);
+        // 新增一个栈帧，栈帧回退有函数内OP_RETURN负责
         case OBJ_CLOSURE: {
             return call((AS_CLOSURE(callee)), argCount);
         }
 
+        // 不新增栈帧，需要手工回退栈顶位置
         case OBJ_NATIVE: {
             NativeFn native = AS_NATIVE(callee);
             Value result = native(argCount, vm.stackTop - argCount);
@@ -162,12 +171,49 @@ static bool callValue(Value callee, int argCount) {
             return true;
         }
 
+        case OBJ_CLASS: {
+            ObjClass* klass = AS_CLASS(callee);
+            // 新建实例作为this
+            vm.stackTop[- 1 - argCount] = OBJ_VAL(newInstance(klass));
+            Value initializer;
+
+            if (tableGet(&klass->methods, vm.initString, &initializer)) {
+                return call(AS_CLOSURE(initializer), argCount);
+            } else if (argCount != 0) {
+                runtimeError("Expected 0 arguments but got %d.",
+                       argCount);
+                return false;
+            }
+            return true;
+        }
+
+        case OBJ_BOUND_METHOD: {
+            ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
+            // 绑定的receiver作为this
+            vm.stackTop[-argCount - 1] = bound->receiver;
+            return call(bound->method, argCount);
+        }
+
         default:
             break;
         }
     }
     runtimeError("Can only call functions and classes");
     return false;
+}
+
+static bool bindMethod(ObjClass* klass, ObjString* name) {
+    Value method;
+    if (! tableGet(&klass->methods, name, &method)) {
+        runtimeError("Undefined property '%s'.", name->chars);
+        return false;
+    }
+
+    ObjBoundMethod* bound = newBoundMethod(peek(0), AS_CLOSURE(method));
+
+    pop();
+    push(OBJ_VAL(bound));
+    return true;
 }
 
 // TODO: 向有序链表中插入新元素，或者如果存在相同元素，返回已有元素
@@ -211,6 +257,15 @@ static void closeUpvalues(Value* last) {
     }
 }
 
+static void defineMethod(ObjString* name) {
+    Value method = peek(0);
+    ObjClass* klass = AS_CLASS(peek(1));
+    tableSet(&klass->methods, name, method);
+
+    // pop off method on stack top
+    pop();
+}
+
 static bool isFalsey(Value value) {
     return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
@@ -229,6 +284,37 @@ static void concatenate() {
     pop();
     pop();
     push(OBJ_VAL(result));
+}
+
+static bool invokeFromClass(ObjClass* klass, ObjString* name, uint8_t argCount) {
+    Value method;
+    if (!tableGet(&klass->methods, name, &method)) {
+        runtimeError("Undefined property '%s'.", name->chars);
+        return false;
+    }
+
+    return call(AS_CLOSURE(method), argCount);
+}
+
+static bool invoke(ObjString* name, int argCount) {
+    Value receiver = peek(argCount);
+
+  if (!IS_INSTANCE(receiver)) {
+    runtimeError("Only instances have methods.");
+    return false;
+  }
+
+
+    ObjInstance* instance = AS_INSTANCE(receiver);
+
+// 先检查属性，可能动态添加方法
+  Value value;
+  if (tableGet(&instance->fields, name, &value)) {
+    vm.stackTop[-argCount - 1] = value;
+    return callValue(value, argCount);
+  }
+
+    return invokeFromClass(instance->klass, name, argCount);
 }
 
 static InterpertResult run() {
@@ -276,7 +362,6 @@ static InterpertResult run() {
                 vm.stackTop = frame->slots;
                 push(result);
                 frame = &vm.frames[vm.frameCount - 1];
-
                 break;
             }
             case OP_NEGATE:
@@ -431,7 +516,66 @@ static InterpertResult run() {
                 closeUpvalues(vm.stackTop - 1);
                 pop();
                 break;
-            break;
+
+            case OP_CLASS:
+                push(OBJ_VAL(newClass(READ_STRING())));
+                break;
+
+            case OP_METHOD:
+                defineMethod(READ_STRING());
+                break;
+
+            case OP_GET_PROPERTY: {
+                if (!IS_INSTANCE(peek(0))) {
+                    runtimeError("Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                ObjString* name = READ_STRING();
+                ObjInstance* instance = AS_INSTANCE(peek(0));
+
+                Value value;
+                if (tableGet(&instance->fields, name, &value)) {
+                    pop();
+                    push(value);
+                    break;
+                }
+
+                if (!bindMethod(instance->klass, name)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+
+            case OP_SET_PROPERTY: {
+                if (!IS_INSTANCE(peek(1))) {
+                    runtimeError("Only instances have fields.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                ObjString* name = READ_STRING();
+                Value value = peek(0);
+                ObjInstance* instance = AS_INSTANCE(peek(1));
+
+                tableSet(&instance->fields, name, value);
+                pop();
+                pop();
+                push(value);
+                break;
+            }
+
+            case OP_INVOKE: {
+                // OP_INVOKE name argCount;
+                ObjString* name = READ_STRING();
+                uint8_t argCount = READ_BYTE();
+                if (!invoke(name, argCount)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm.frames[vm.frameCount-1];
+                break;
+            }
+
+            default:
+                break;
         }
     }
 

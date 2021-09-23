@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "compiler.h"
 #include "memory.h"
+#include "table.h"
 #include "vm.h"
 
 #ifdef DEBUG_LOG_GC
@@ -65,10 +66,24 @@ static void freeObject(Obj* object) {
             break;
         }
         case OBJ_UPVALUE: {
-
             FREE(ObjUpvalue, object);
             break;
         }
+        case OBJ_CLASS: {
+            ObjClass* klass = (ObjClass*)object;
+            freeTable(&klass->methods);
+            FREE(OBJ_CLASS, object);
+            break;
+        }
+        case OBJ_INSTANCE: {
+            ObjInstance* instance = (ObjInstance*)object;
+            freeTable(&instance->fields);
+            FREE(OBJ_INSTANCE, instance);
+            break;
+        }
+        case OBJ_BOUND_METHOD:
+            FREE(ObjBoundMethod, object);
+            break;
     }
 }
 
@@ -140,6 +155,8 @@ static void markRoots() {
 
     markTable(&vm.globals);
 
+    markObject((Obj*)vm.initString);
+
     markCompilerRoots();
 }
 
@@ -177,6 +194,25 @@ static void blackenObject(Obj* object) {
         for (int i = 0; i < closure->upvalueCount; i++) {
             markObject((Obj*)closure->upvalues[i]);
         }
+        break;
+    }
+    case OBJ_CLASS: {
+        ObjClass* klass = (ObjClass*) object;
+        markObject((Obj*)klass->name);
+        markTable(&klass->methods);
+        break;
+    }
+    case OBJ_INSTANCE: {
+        ObjInstance* instance = (ObjInstance*)object;
+        markObject((Obj*)instance->klass);
+        markTable(&instance->fields);
+        break;
+    }
+
+    case OBJ_BOUND_METHOD: {
+        ObjBoundMethod* bound = (ObjBoundMethod*)object;
+        markValue(bound->receiver);
+        markObject((Obj*)bound->method);
         break;
     }
 

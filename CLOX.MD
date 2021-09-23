@@ -311,6 +311,17 @@ stack semantic
 
 > Many Lisp implementations dynamically allocate stack frames because it simplifies implementing continuations. If your language supports continuations, then function calls do not always have stack semantics.
 
+函数调用的栈帧格式
+
+函数调用 OP_CALL 之前栈帧将栈帧形成这种格式，被调用的函数在栈帧开始位置，后接若干个函数实参。
+
+fn param1 param2 param3
+
+OP_CALL 指令的作用是创建新的栈帧，call frame，栈帧开头指向 fn。
+
+函数调用结束时 OP_RETURN 指令，作用是将函数返回值放到栈帧开头位置。
+OP_CLASS 遵循同样规则，初始化结束后将新创建的类实例放到栈帧开头位置。
+
 ## Closure
 
 查询关键词搜索相关资料 Closure Conversion & Lambda lifting
@@ -606,13 +617,38 @@ stop-the-world 进行 gc 时用户程序停止执行
 1. 实例 ObjInstance
 1. 类的声明 ClassDeclaration
 1. 创建类实例
-1. 实例属性读写
+   1. 构造函数调用的时，栈帧上第一个槽作为 this 变量对应值，同时也是新初始化的实例对象。
+   1. 有显式声明的构造函数 init，支持传入函数参数，没有 init 函数时创建新实例的构造函数调用不能接受任何参数。
+   1. 构造函数返回值隐式的是实例本身，即 this 变量，构造函数中可以使用不带参数 return;表示提前结束，但是不能使用带参数的返回语句 return 1;
+   1. 构造函数编译为字节码指令时将 return 语句编译为默认输出第一个局部变量（this，也就是新初始化的实例值）。
+1. 实例属性读写，成员表达式解析，根据读写生成对应的字节码 OP_GET_PROPERTY/OP_SET_PROPERTY
+   1. 读写都要检查 实例是否是 ObjInstance 类型
+   1. 读需要在属性不存在是报运行时错误
 1. 类实例是否允许动态添加删除字段（Field）读写不存在的 Field 如何处理？如何优化属性读写性能，在编译时确认所有类实例字段？
 1. 访问实例属性表达式中，object 不是对象实例如何处理？
 1. 定义类方法
+   1. 在类结构体 ObjClass 增加 Table methods 字段代表函数体，每个函数定义有三个信息，所属类、函数名、函数本身
+   1. 实例方法属性访问返回 ObjBoundMethod 对象在栈顶，记录了对应的实例对象，receiver，这样方法作为值传递到其他地方调用的时候其中 this 参数隐式的绑定到 receiver 上。
+   1. 类方法编译时，this 被当做普通变量处理，好处在于 this 会像其他局部变量一样自动被捕获。this 被存放在局部变量数组的第一个下标位置中，局部变量数组初始化时刻意保留第一个下标做此用途。
 1. 类方法调用，处理 this 绑定，this 是 locals 的第一个，stack 上将 frame 的第一个位置（方法值）替换为 this，因为方法被调用后要弹出，不需要保存，所以可以占用。 类方法可以传递给其他对象 BoundMethod = Closure + Instance
-   1. 检测 this 使用的位置，必须在类函数中
-   1. 优化将 instance.method() 优化为单独的一条执行指令，而不是先创建 BoundMethod 再执行
+   1. 检测 this 使用的位置，必须在类方法中，不允许出现在函数中，但是允许出现在嵌套在方法中的函数中，此时函数中使用 this 访问到外层方法的 this，使用一个变量记录当前 class 来进行判断。
+   1. 优化将 instance.method() 优化为单独的一条执行指令，而不是先创建 BoundMethod 再执行 OP_INVOKE name argCount，动态添加属性函数的情况，不能只从类静态定义中寻找方法调用。
+
+```c
+class Oops {
+  init() {
+    fun f() {
+      print "not a method";
+    }
+
+    this.field = f;
+  }
+}
+
+var oops = Oops();
+oops.field();
+```
+
 1. 构造函数的处理，返回值是初始化的类实例，禁止使用 return？
 1. 嵌套类？
 
