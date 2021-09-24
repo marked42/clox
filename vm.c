@@ -49,6 +49,8 @@ void initVM() {
     vm.initString = NULL;
     vm.initString = copyString("init", 4);
 
+    printf("[debug]: %s\n", vm.initString == copyString("init", 4) ? "same" : "no");
+
     initTable(&vm.strings);
     initTable(&vm.globals);
 
@@ -156,10 +158,12 @@ static bool callValue(Value callee, int argCount) {
         {
         // case OBJ_FUNCTION:
         //     return call(AS_FUNCTION(callee), argCount);
+        // 新增一个栈帧，栈帧回退有函数内OP_RETURN负责
         case OBJ_CLOSURE: {
             return call((AS_CLOSURE(callee)), argCount);
         }
 
+        // 不新增栈帧，需要手工回退栈顶位置
         case OBJ_NATIVE: {
             NativeFn native = AS_NATIVE(callee);
             Value result = native(argCount, vm.stackTop - argCount);
@@ -281,6 +285,37 @@ static void concatenate() {
     pop();
     pop();
     push(OBJ_VAL(result));
+}
+
+static bool invokeFromClass(ObjClass* klass, ObjString* name, uint8_t argCount) {
+    Value method;
+    if (!tableGet(&klass->methods, name, &method)) {
+        runtimeError("Undefined property '%s'.", name->chars);
+        return false;
+    }
+
+    return call(AS_CLOSURE(method), argCount);
+}
+
+static bool invoke(ObjString* name, uint8_t argCount) {
+    Value receiver = peek(argCount);
+
+  if (!IS_INSTANCE(receiver)) {
+    runtimeError("Only instances have methods.");
+    return false;
+  }
+
+
+    ObjInstance* instance = AS_INSTANCE(receiver);
+
+// 先检查属性，可能动态添加方法
+  Value value;
+  if (tableGet(&instance->fields, name, &value)) {
+    vm.stackTop[-argCount - 1] = value;
+    return callValue(value, argCount);
+  }
+
+    return invokeFromClass(instance->klass, name, argCount);
 }
 
 static InterpertResult run() {
@@ -526,6 +561,17 @@ static InterpertResult run() {
                 pop();
                 pop();
                 push(value);
+                break;
+            }
+
+            case OP_INVOKE: {
+                // OP_INVOKE name argCount;
+                ObjString* name = READ_STRING();
+                uint8_t argCount = READ_SHORT();
+                if (!invoke(name, argCount)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm.frames[vm.frameCount-1];
                 break;
             }
 

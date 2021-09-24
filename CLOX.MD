@@ -632,7 +632,23 @@ stop-the-world 进行 gc 时用户程序停止执行
    1. 类方法编译时，this 被当做普通变量处理，好处在于 this 会像其他局部变量一样自动被捕获。this 被存放在局部变量数组的第一个下标位置中，局部变量数组初始化时刻意保留第一个下标做此用途。
 1. 类方法调用，处理 this 绑定，this 是 locals 的第一个，stack 上将 frame 的第一个位置（方法值）替换为 this，因为方法被调用后要弹出，不需要保存，所以可以占用。 类方法可以传递给其他对象 BoundMethod = Closure + Instance
    1. 检测 this 使用的位置，必须在类方法中，不允许出现在函数中，但是允许出现在嵌套在方法中的函数中，此时函数中使用 this 访问到外层方法的 this，使用一个变量记录当前 class 来进行判断。
-   1. 优化将 instance.method() 优化为单独的一条执行指令，而不是先创建 BoundMethod 再执行
+   1. 优化将 instance.method() 优化为单独的一条执行指令，而不是先创建 BoundMethod 再执行 OP_INVOKE name argCount，动态添加属性函数的情况，不能只从类静态定义中寻找方法调用。
+
+```c
+class Oops {
+  init() {
+    fun f() {
+      print "not a method";
+    }
+
+    this.field = f;
+  }
+}
+
+var oops = Oops();
+oops.field();
+```
+
 1. 构造函数的处理，返回值是初始化的类实例，禁止使用 return？
 1. 嵌套类？
 
