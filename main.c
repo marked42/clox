@@ -126,12 +126,26 @@ int main(int argc, const char* argv[]) {
 // "print toast.jam = \"grape\";";
 
 	// 属性读写例子2
-	const char* source =
-"class Pair {}"
-"var pair = Pair();"
-"pair.first = 1;"
-"pair.second = 2;"
-"print pair.first + pair.second;";
+// 	const char* source =
+// "class Pair {}"
+// "var pair = Pair();"
+// "pair.first = 1;"
+// "pair.second = 2;"
+// "print pair.first + pair.second;";
+
+// 	const char* source =
+// "class Brunch {"
+// "  bacon() {}"
+// "  eggs() {}"
+// "}";
+
+// 	const char* source =
+// "class Brunch {"
+// "  eggs() {}"
+// "}"
+
+// "var brunch = Brunch();"
+// "var eggs = brunch.eggs;";
 
 // 	const char* source =
 // "fun outer() {"
@@ -145,6 +159,28 @@ int main(int argc, const char* argv[]) {
 // "    }"
 // "  }"
 // "}";
+
+// 	const char* source =
+// "class Scone {"
+// "  topping(first, second) {"
+// "    print \"scone with \" + first + \" and \" + second;"
+// "  }"
+// "}"
+// "var scone = Scone();"
+// "scone.topping(\"berries\", \"cream\");";
+
+	const char* source =
+"class CoffeeMaker {"
+"  init(coffee) {"
+"    this.coffee = coffee;"
+"  }"
+"  brew() {"
+"    print \"Enjoy your cup of \" + this.coffee;"
+"    this.coffee = nil;"
+"  }"
+"}"
+"var maker = CoffeeMaker(\"coffee and chicory\");"
+"maker.brew();";
 
 	interpret(source);
 

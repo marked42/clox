@@ -45,6 +45,10 @@ void initVM() {
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
 
+    // 先初始化为NULL，防止copyString触发GC时会访问到initString
+    vm.initString = NULL;
+    vm.initString = copyString("init", 4);
+
     initTable(&vm.strings);
     initTable(&vm.globals);
 
@@ -53,6 +57,8 @@ void initVM() {
 
 void freeVM() {
     freeObjects();
+
+    vm.initString = NULL;
 
     freeTable(&vm.strings);
     freeTable(&vm.globals);
@@ -164,8 +170,25 @@ static bool callValue(Value callee, int argCount) {
 
         case OBJ_CLASS: {
             ObjClass* klass = AS_CLASS(callee);
+            // 新建实例作为this
             vm.stackTop[- 1 - argCount] = OBJ_VAL(newInstance(klass));
+            Value initializer;
+
+            if (tableGet(&klass->methods, vm.initString, &initializer)) {
+                return call(AS_CLOSURE(initializer), argCount);
+            } else if (argCount != 0) {
+                runtimeError("Expected 0 arguments but got %d.",
+                       argCount);
+                return false;
+            }
             return true;
+        }
+
+        case OBJ_BOUND_METHOD: {
+            ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
+            // 绑定的receiver作为this
+            vm.stackTop[-argCount - 1] = bound->receiver;
+            return call(bound->method, argCount);
         }
 
         default:
@@ -174,6 +197,20 @@ static bool callValue(Value callee, int argCount) {
     }
     runtimeError("Can only call functions and classes");
     return false;
+}
+
+static bool bindMethod(ObjClass* klass, ObjString* name) {
+    Value method;
+    if (! tableGet(&klass->methods, name, &method)) {
+        runtimeError("Undefined property '%s'.", name->chars);
+        return false;
+    }
+
+    ObjBoundMethod* bound = newBoundMethod(peek(0), AS_CLOSURE(method));
+
+    pop();
+    push(OBJ_VAL(bound));
+    return true;
 }
 
 // TODO: 向有序链表中插入新元素，或者如果存在相同元素，返回已有元素
@@ -215,6 +252,15 @@ static void closeUpvalues(Value* last) {
 
         vm.openValues = upvalue->next;
     }
+}
+
+static void defineMethod(ObjString* name) {
+    Value method = peek(0);
+    ObjClass* klass = AS_CLASS(peek(1));
+    tableSet(&klass->methods, name, method);
+
+    // pop off method on stack top
+    pop();
 }
 
 static bool isFalsey(Value value) {
@@ -441,6 +487,10 @@ static InterpertResult run() {
                 push(OBJ_VAL(newClass(READ_STRING())));
                 break;
 
+            case OP_METHOD:
+                defineMethod(READ_STRING());
+                break;
+
             case OP_GET_PROPERTY: {
                 if (!IS_INSTANCE(peek(0))) {
                     runtimeError("Only instances have properties.");
@@ -457,8 +507,10 @@ static InterpertResult run() {
                     break;
                 }
 
-                runtimeError("Undefined property '%s'.", name->chars);
-                return INTERPRET_RUNTIME_ERROR;
+                if (!bindMethod(instance->klass, name)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
             }
 
             case OP_SET_PROPERTY: {

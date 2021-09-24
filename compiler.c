@@ -63,6 +63,8 @@ typedef struct Upvalue {
 typedef enum {
     TYPE_FUNCTION,
     TYPE_SCRIPT,
+    TYPE_METHOD,
+    TYPE_INITIALIZER,
 } FunctionType;
 
 typedef struct Compiler {
@@ -78,9 +80,14 @@ typedef struct Compiler {
     Upvalue upvalues[UINT8_COUNT];
 } Compiler;
 
+typedef struct ClassCompiler {
+  struct ClassCompiler* enclosing;
+} ClassCompiler;
+
 Parser parser;
 Compiler *current = NULL;
 Chunk* compilingChunk;
+ClassCompiler* currentClass = NULL;
 
 Chunk* currentChunk() {
 	return &current->function->chunk;
@@ -165,13 +172,20 @@ static void emitLoop(int loopStart) {
 }
 
 void emitReturn() {
-    emitByte(OP_NIL);
+    if (current->type == TYPE_INITIALIZER) {
+        // 下标0的位置是this变量，也是构造函数的返回值
+        emitBytes(OP_GET_LOCAL, 0);
+    } else {
+        emitByte(OP_NIL);
+    }
     emitByte(OP_RETURN);
 }
 
 ObjFunction *endCompiler() {
     // generate implicit return instruction if last statement is not return statement
-    if (currentChunk()->code[currentChunk()->count - 1] != OP_RETURN) {
+    Chunk* chunk = currentChunk();
+    // if node chunk code or chunk code last bytecode is not OP_RETURN
+    if (chunk->count == 0 || chunk->code[chunk->count - 1] != OP_RETURN) {
         emitReturn();
     }
 
@@ -264,8 +278,14 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
     // compiler claims stack slot zero for internal use
     Local* local = &current->locals[current->localCount++];
     local->depth = 0;
-    local->name.start = "";
-    local->name.length = 0;
+    // 第一个位置留给this使用
+    if (type != TYPE_FUNCTION) {
+        local->name.start = "this";
+        local->name.length = 4;
+    } else {
+        local->name.start = "";
+        local->name.length = 0;
+    }
     local->isCaptured = false;
 }
 
@@ -419,6 +439,7 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
     return -1;
 }
 
+// 解析变量名，生成对应的读写指令
 static void namedVariable(Token* token, bool canAssign) {
     int arg = resolveLocal(current, token);
     uint8_t getOp, setOp;
@@ -445,6 +466,14 @@ static void namedVariable(Token* token, bool canAssign) {
 
 static void variable(bool canAssign) {
     namedVariable(&parser.previous, canAssign);
+}
+
+static void this_(bool canAssign) {
+    if (currentClass == NULL) {
+        error("Can't use 'this' outside of a class.");
+        return;
+    }
+    variable(false);
 }
 
 static void and_(bool canAssign) {
@@ -503,7 +532,7 @@ ParseRule rules[] = {
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_THIS]          = {this_,     NULL,   PREC_NONE},
   [TOKEN_TRUE]          = {literal,     NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
@@ -805,8 +834,22 @@ static void funDeclaration() {
     defineVariable(global);
 }
 
+static void method() {
+    consume(TOKEN_IDENTIFIER, "Expect method name");
+    uint8_t constant = identifierConstant(&parser.previous);
+
+    FunctionType type = TYPE_METHOD;
+    if (parser.previous.length == 4 && memcmp(parser.previous.start, "init", 4) == 0) {
+        type = TYPE_INITIALIZER;
+    }
+
+    function(type);
+    emitBytes(OP_METHOD, constant);
+}
+
 static void classDeclaration() {
     consume(TOKEN_IDENTIFIER, "Expect class name.");
+    Token className = parser.previous;
     uint8_t constant = identifierConstant(&parser.previous);
 
     declareVariable();
@@ -814,8 +857,22 @@ static void classDeclaration() {
     emitBytes(OP_CLASS, constant);
     defineVariable(constant);
 
+    ClassCompiler classCompiler;
+    classCompiler.enclosing = currentClass;
+    currentClass = &classCompiler;
+
+    // push class value on stack for the use of OP_METHOD bytecode
+    namedVariable(&className, false);
     consume(TOKEN_LEFT_BRACE, "Expect '{' after class name");
+    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+        method();
+    }
     consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body");
+
+    currentClass = currentClass->enclosing;
+
+    // pop off class value after OP_METHOD bytecodes finished execution
+    emitByte(OP_POP);
 }
 
 static void declaration() {
@@ -842,6 +899,10 @@ static void returnStatement() {
     if (match(TOKEN_SEMICOLON)) {
         emitReturn();
     } else {
+        if (current->type == TYPE_INITIALIZER) {
+            error("Can't return a value from an initializer.");
+        }
+
         expression();
         consume(TOKEN_SEMICOLON, "Expect ';' after return value");
         emitByte(OP_RETURN);
