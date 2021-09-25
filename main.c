@@ -169,18 +169,37 @@ int main(int argc, const char* argv[]) {
 // "var scone = Scone();"
 // "scone.topping(\"berries\", \"cream\");";
 
+// 	const char* source =
+// "class CoffeeMaker {"
+// "  init(coffee) {"
+// "    this.coffee = coffee;"
+// "  }"
+// "  brew() {"
+// "    print \"Enjoy your cup of \" + this.coffee;"
+// "    this.coffee = nil;"
+// "  }"
+// "}"
+// "var maker = CoffeeMaker(\"coffee and chicory\");"
+// "maker.brew();";
+
+// inheritance superclass method call
 	const char* source =
-"class CoffeeMaker {"
-"  init(coffee) {"
-"    this.coffee = coffee;"
+"class Doughnut {"
+"  cook() {"
+"    print \"Dunk in the fryer.\";"
+"    this.finish(\"sprinkles\");"
 "  }"
-"  brew() {"
-"    print \"Enjoy your cup of \" + this.coffee;"
-"    this.coffee = nil;"
+"  finish(ingredient) {"
+"    print \"Finish with \" + ingredient;"
 "  }"
 "}"
-"var maker = CoffeeMaker(\"coffee and chicory\");"
-"maker.brew();";
+"class Cruller < Doughnut {"
+"  finish(ingredient) {"
+"    super.finish(\"icing\");"
+"  }"
+"}";
+// "var a = Cruller();"
+// "a.finish(\"test\");";
 
 	interpret(source);
 

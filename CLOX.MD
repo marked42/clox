@@ -621,6 +621,7 @@ stop-the-world 进行 gc 时用户程序停止执行
    1. 有显式声明的构造函数 init，支持传入函数参数，没有 init 函数时创建新实例的构造函数调用不能接受任何参数。
    1. 构造函数返回值隐式的是实例本身，即 this 变量，构造函数中可以使用不带参数 return;表示提前结束，但是不能使用带参数的返回语句 return 1;
    1. 构造函数编译为字节码指令时将 return 语句编译为默认输出第一个局部变量（this，也就是新初始化的实例值）。
+   1. 构造函数 init 调用需要从 hash 表中查询，O(1)的时间复杂度，将 init 保存在 ObjClass 对象上提高访问速度
 1. 实例属性读写，成员表达式解析，根据读写生成对应的字节码 OP_GET_PROPERTY/OP_SET_PROPERTY
    1. 读写都要检查 实例是否是 ObjInstance 类型
    1. 读需要在属性不存在是报运行时错误
@@ -633,6 +634,14 @@ stop-the-world 进行 gc 时用户程序停止执行
 1. 类方法调用，处理 this 绑定，this 是 locals 的第一个，stack 上将 frame 的第一个位置（方法值）替换为 this，因为方法被调用后要弹出，不需要保存，所以可以占用。 类方法可以传递给其他对象 BoundMethod = Closure + Instance
    1. 检测 this 使用的位置，必须在类方法中，不允许出现在函数中，但是允许出现在嵌套在方法中的函数中，此时函数中使用 this 访问到外层方法的 this，使用一个变量记录当前 class 来进行判断。
    1. 优化将 instance.method() 优化为单独的一条执行指令，而不是先创建 BoundMethod 再执行 OP_INVOKE name argCount，动态添加属性函数的情况，不能只从类静态定义中寻找方法调用。
+1. 继承
+   1. OP_INHERIT stack: [superClass, subClass]
+   1. super 关键字的实现，栈上保存父类的值[superClass]，为每个子类方法定义名称为 super 的局部变量，
+   1. super 关键字不能单独使用，只能是 super.prop 的形式，对应的栈内容 [this, superclass] OP_GET_SUPER "prop" -> [ prop ]
+   1. 快速的 super call, [this, arg1, arg2, ..., superclass] OP_SUPER_INVOKE methodName argCount
+   1. 实现策略 copy-down inheritance 将父类的方法拷贝到子类上，这种方法只适合于类方法在编译期完全确定，不会在运行时修改的情况。如果允许类方法运行时修改应该如何处理继承？
+   1. 这里并没有实现子类构造函数自动调用父类构造函数的功能，如何处理？
+   1. 父子类有同名的数据成员怎么处理？
 
 ```c
 class Oops {

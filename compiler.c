@@ -82,6 +82,7 @@ typedef struct Compiler {
 
 typedef struct ClassCompiler {
   struct ClassCompiler* enclosing;
+  bool hasSuperClass;
 } ClassCompiler;
 
 Parser parser;
@@ -444,19 +445,19 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
 }
 
 // 解析变量名，生成对应的读写指令
-static void namedVariable(Token* token, bool canAssign) {
-    int arg = resolveLocal(current, token);
+static void namedVariable(Token token, bool canAssign) {
+    int arg = resolveLocal(current, &token);
     uint8_t getOp, setOp;
     // find no local variable of name token, so it's a global variable
     if (arg != LOCAL_VARIABLE_NOT_FOUND) {
         getOp = OP_GET_LOCAL;
         setOp = OP_SET_LOCAL;
     // local variable
-    } else if ((arg = resolveUpvalue(current, token)) != -1) {
+    } else if ((arg = resolveUpvalue(current, &token)) != -1) {
         getOp = OP_GET_UPVALUE;
         setOp = OP_SET_UPVALUE;
     } else {
-        arg = identifierConstant(token);
+        arg = identifierConstant(&token);
         getOp = OP_GET_GLOBAL;
         setOp = OP_SET_GLOBAL;
     }
@@ -469,7 +470,7 @@ static void namedVariable(Token* token, bool canAssign) {
 }
 
 static void variable(bool canAssign) {
-    namedVariable(&parser.previous, canAssign);
+    namedVariable(parser.previous, canAssign);
 }
 
 static void this_(bool canAssign) {
@@ -478,6 +479,37 @@ static void this_(bool canAssign) {
         return;
     }
     variable(false);
+}
+
+static Token syntheticToken(const char* text) {
+    Token token;
+    token.start = text;
+    token.length = (int)strlen(text);
+
+    return token;
+}
+
+static void super_(bool canAssign) {
+    if (currentClass == NULL) {
+        error("Can't use 'super' outside of a class.");
+    } else if (!currentClass->hasSuperClass) {
+        error("Can't use 'super' in a class with no superclass.");
+    }
+
+    consume(TOKEN_DOT, "Expect '.' after 'super'.");
+    consume(TOKEN_IDENTIFIER, "Expect superclass method name.");
+    uint8_t name = identifierConstant(&parser.previous);
+
+    namedVariable(syntheticToken("this"), false);
+    if (match(TOKEN_LEFT_PAREN)) {
+        uint8_t argCount = argumentList();
+        namedVariable(syntheticToken("super"), false);
+        emitBytes(OP_SUPER_INVOKE, name);
+        emitByte(argCount);
+    } else {
+        namedVariable(syntheticToken("super"), false);
+        emitBytes(OP_GET_SUPER, name);
+    }
 }
 
 static void and_(bool canAssign) {
@@ -535,7 +567,7 @@ ParseRule rules[] = {
   [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_SUPER]         = {super_,     NULL,   PREC_NONE},
   [TOKEN_THIS]          = {this_,     NULL,   PREC_NONE},
   [TOKEN_TRUE]          = {literal,     NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
@@ -863,20 +895,43 @@ static void classDeclaration() {
 
     ClassCompiler classCompiler;
     classCompiler.enclosing = currentClass;
+    classCompiler.hasSuperClass = false;
     currentClass = &classCompiler;
 
+    if (match(TOKEN_LESS)) {
+        consume(TOKEN_IDENTIFIER, "Expect superclass name.");
+        variable(false);
+
+        if (identifiersEqual(&className, &parser.previous)) {
+            error("A class can't inherit from itself.");
+        }
+
+        beginScope();
+        addLocal(syntheticToken("super"));
+        defineVariable(0);
+
+        namedVariable(className, false);
+        emitByte(OP_INHERIT);
+
+        classCompiler.hasSuperClass = true;
+    }
+
     // push class value on stack for the use of OP_METHOD bytecode
-    namedVariable(&className, false);
+    namedVariable(className, false);
     consume(TOKEN_LEFT_BRACE, "Expect '{' after class name");
     while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
         method();
     }
     consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body");
 
-    currentClass = currentClass->enclosing;
-
     // pop off class value after OP_METHOD bytecodes finished execution
     emitByte(OP_POP);
+
+    if (classCompiler.hasSuperClass) {
+        endScope();
+    }
+
+    currentClass = currentClass->enclosing;
 }
 
 static void declaration() {
