@@ -29,6 +29,89 @@
 
 1. 内存管理，reallocate 使用了标准库函数 realloc，内部使用了 malloc 和 free，试着完全自己实现内存管理，初始状态可以向操作系统申请固定大小的内存，然后完全自己管理。
 
+## Interpreter
+
+### memory system
+
+Language Implementation Patterns Part III
+
+如何表示程序中的数据？ 程序数据部分概念，每种都可以使用一个字典表示。
+
+1. 全局数据
+1. 函数使用的数据，参数和局部变量，函数嵌套调用形成函数调用栈。
+1. 类实例数据
+
+如果确定变量 a 使用的是那种数据表示？
+
+syntax directed interpreter -> tree walk interpreter -> stack based bytecode interpreter -> register based bytecode interpreter
+
+比较优缺点、适用场景
+
+1. 运行效率
+1. tree walk interpreter 支持前置引用，性能更好，因为提前将源码解析为 ast 了。
+1. 实现复杂程度
+1. 可移植
+
+分类
+
+1. 语法制导
+   1. 不支持前置引用 forward reference，因为采用单趟编译 single pass compiler
+   1. 适用于简单的 DSL
+1. tree walk interpreter
+   1. 提前解析源码，形成 scope tree，将 scope 信息关联到对应的 ast 节点上
+   1. 支持前置引用，因为提前解析了一遍源码
+
+在编译时做的工作越多，运行时需要做的工作越少，运行效率就越高
+
+## bytecode interpreter
+
+### assembler
+
+汇编语言
+
+text base assembly program -> binary bytecode instruction
+
+### dissembler
+
+反汇编
+
+### Bytecode Machine Architecture
+
+LIP Ch 10.3
+
+基础结构
+
+1. Code Memory
+1. ip register
+1. global memory 全局对象数组
+1. constant pool 常量池，bytecode 操作数据尺寸太大无法在一个 32 位或者（64 位）表示的话需要将数据放在常量池中，使用数据下标作为操作数。
+1. function call stack 函数调用栈，记录对应函数调用过程信息
+1. frame pointer register 当前栈帧
+
+执行模型，模拟 CPU 依次取指令解释执行
+
+基于栈的解释器
+
+栈式解释器的简单例子，逆序波兰表达式的执行
+
+1. 操作数栈 operand stack
+1. 操作数栈顶寄存器 stack pointer
+
+基于寄存器的解释器
+
+1. An infinite and regular register set per function call.
+
+基于寄存器的虚拟机比栈式虚拟机要快，手动调整字节码来优化执行效率，使用寄存器可以节省不必要的操作数进栈、出栈操作。
+
+1. stack-based Java VM Stack
+1. register-based Dalvik VM / Android Run Time / Lua 5.0
+
+### super instruction
+
+字节码的设计，使用 super instruction 提高执行效率
+
+1. 使用 iconst0 单字节指令替换 iconst 0 双字节指令
+
 ## Virtual Machine
 
 1. bytecode 的顺序是，逆波兰表达式
